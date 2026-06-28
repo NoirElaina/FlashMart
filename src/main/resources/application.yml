@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: FlashMart
+  profiles:
+    active: dev
+
+mybatis-plus:
+  mapper-locations: classpath*:org/example/flashmart/**/mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+flashmart:
+  jwt:
+    expiration-ms: 86400000

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.flashmart.cart.mapper.CartMapper">
+
+    <!-- 单项更新必须同时带 cartId 和 userId，防止越权修改别人的购物车。 -->
+    <update id="updateCart">
+        update shopping_cart
+        <set>
+            <if test="cartItemUpdateDTO.quantity != null">
+                quantity = #{cartItemUpdateDTO.quantity},
+            </if>
+            <if test="cartItemUpdateDTO.selected != null">
+                selected = #{cartItemUpdateDTO.selected},
+            </if>
+            update_time = now()
+        </set>
+        where id = #{cartId}
+          and user_id = #{userId}
+    </update>
+
+    <!-- 批量勾选只作用于当前用户的 cartIds，前端传错 ID 也不会影响其他用户。 -->
+    <update id="updateSelectedBatch">
+        update shopping_cart
+        set selected = #{selected},
+            update_time = now()
+        where user_id = #{userId}
+          and id in
+          <foreach collection="cartIds" item="cartId" open="(" separator="," close=")">
+              #{cartId}
+          </foreach>
+    </update>
+
+    <!-- 删除已选购物车项，Service 通过影响行数判断是否存在无效 cartId。 -->
+    <delete id="deleteBatchByUserId">
+        delete from shopping_cart
+        where user_id = #{userId}
+          and id in
+          <foreach collection="cartIds" item="cartId" open="(" separator="," close=")">
+              #{cartId}
+          </foreach>
+    </delete>
+
+    <!-- 结算预览和订单创建前查询购物车商品快照，必须按当前用户过滤。 -->
+    <select id="selectCartItemsByIds" resultType="org.example.flashmart.cart.model.queryobject.CartItemQueryObject">
+        select
+        c.id,
+        c.product_id as productId,
+        p.name,
+        p.image,
+        p.category,
+        p.original_price as originalPrice,
+        p.sale_price as salePrice,
+        c.quantity,
+        c.selected,
+        p.stock,
+        p.sold,
+        p.is_seckill as seckill,
+        p.limit_per_user as limitPerUser,
+        c.create_time as createTime,
+        c.update_time as updateTime
+        from shopping_cart c
+        left join products p on c.product_id = p.id
+        where c.user_id = #{userId}
+        and c.id in
+        <foreach collection="cartIds" item="cartId" open="(" separator="," close=")">
+            #{cartId}
+        </foreach>
+    </select>
+</mapper>

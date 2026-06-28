@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.flashmart.order.mapper.OrderMapper">
+
+    <!-- useGeneratedKeys 会把订单主键回填到 OrderDO.id，后续订单项需要这个 orderId。 -->
+    <insert id="insertOrder" useGeneratedKeys="true" keyProperty="id">
+        insert into orders (order_no, user_id, status, product_amount, shipping_fee, discount_amount,
+                            payable_amount, receiver_name, receiver_phone, receiver_address,
+                            pay_expire_time, close_deadline_time, create_time, update_time)
+        values (#{orderNo}, #{userId}, #{status}, #{productAmount}, #{shippingFee}, #{discountAmount},
+                #{payableAmount}, #{receiverName}, #{receiverPhone}, #{receiverAddress},
+                #{payExpireTime}, #{closeDeadlineTime}, #{createTime}, #{updateTime})
+    </insert>
+
+    <!-- 订单项保存的是下单瞬间的商品快照，不能依赖后续商品表的价格或名称变化。 -->
+    <insert id="insertOrderItems">
+        insert into order_items(order_id, product_id, product_name, product_image, product_price, quantity, subtotal,
+        create_time) VALUES
+        <foreach
+                collection="items" item="item" separator=",">
+        (
+        #{item.orderId}, #{item.productId}, #{item.productName}, #{item.productImage}, #{item.productPrice},
+        #{item.quantity}, #{item.subtotal}, now()
+        )
+        </foreach>
+    </insert>
+
+    <select id="listOrders" resultType="org.example.flashmart.order.model.vo.OrderDetailVO">
+        select id as orderId,
+               order_no as orderNo,
+               status,
+               product_amount as productAmount,
+               shipping_fee as shippingFee,
+               discount_amount as discountAmount,
+               payable_amount as payableAmount,
+               receiver_name as receiverName,
+               receiver_phone as receiverPhone,
+               receiver_address as receiverAddress,
+               pay_expire_time as payExpireTime,
+               close_deadline_time as closeDeadlineTime,
+               create_time as createTime
+        from orders
+        where user_id = #{userId}
+        order by create_time desc
+    </select>
+
+    <select id="selectOrderDetail" resultType="org.example.flashmart.order.model.vo.OrderDetailVO">
+        select id as orderId,
+               order_no as orderNo,
+               status,
+               product_amount as productAmount,
+               shipping_fee as shippingFee,
+               discount_amount as discountAmount,
+               payable_amount as payableAmount,
+               receiver_name as receiverName,
+               receiver_phone as receiverPhone,
+               receiver_address as receiverAddress,
+               pay_expire_time as payExpireTime,
+               close_deadline_time as closeDeadlineTime,
+               create_time as createTime
+        from orders
+        where id = #{orderId}
+          and user_id = #{userId}
+    </select>
+
+    <select id="selectOrderItems" resultType="org.example.flashmart.order.model.vo.OrderItemVO">
+        select id,
+               product_id as productId,
+               product_name as productName,
+               product_image as productImage,
+               product_price as productPrice,
+               quantity,
+               subtotal
+        from order_items
+        where order_id = #{orderId}
+        order by id asc
+    </select>
+    <select id="selectOrderItemsByOrderIds" resultType="org.example.flashmart.order.model.vo.OrderItemVO">
+        select id,
+               order_id as orderId,
+               product_id as productId,
+               product_name as productName,
+               product_image as productImage,
+               product_price as productPrice,
+               quantity,
+               subtotal
+        from order_items
+        where order_id in
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+        order by order_id desc, id asc
+    </select>
+
+    <update id="cancelOrder">
+        update orders
+        set status = 'CANCELED',
+            cancel_time = now(),
+            update_time = now()
+        where id = #{orderId}
+          and user_id = #{userId}
+          and status = 'PENDING_PAYMENT'
+    </update>
+    <update id="payOrder">
+        update orders
+        set status='PAID',
+            pay_time = now(),
+            update_time = now()
+        where id = #{orderId}
+          and user_id = #{userId}
+          and status = 'PENDING_PAYMENT'
+          and pay_expire_time >= now()
+    </update>
+</mapper>

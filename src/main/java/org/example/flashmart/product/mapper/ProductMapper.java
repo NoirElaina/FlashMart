@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.example.flashmart.product.model.dataobject.ProductDO;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Mapper
@@ -39,4 +40,24 @@ public interface ProductMapper {
         """)
     int restoreStock(@Param("productId") Integer productId,
                      @Param("quantity") Integer quantity);
+
+    /**
+     * 后台改价：更新原价和售价。
+     */
+    @Update("""
+        update products
+        set original_price = #{originalPrice},
+            sale_price = #{salePrice},
+            update_time = now()
+        where id = #{productId}
+        """)
+    int updatePrice(@Param("productId") Long productId,
+                    @Param("originalPrice") BigDecimal originalPrice,
+                    @Param("salePrice") BigDecimal salePrice);
+
+    /**
+     * 后台上下架：1 上架 / 0 下架。
+     */
+    @Update("update products set status = #{status}, update_time = now() where id = #{productId}")
+    int updateStatus(@Param("productId") Long productId, @Param("status") Integer status);
 }

@@ -18,6 +18,8 @@ import org.example.flashmart.product.service.ProductDetailService;
 import org.example.flashmart.product.service.ProductService;
 import org.example.flashmart.user.mapper.UserMapper;
 import org.example.flashmart.user.model.dataobject.UserDO;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -26,11 +28,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Collections;
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class ProductDetailServiceImpl implements ProductDetailService {
+
+    private static final String DETAIL_LOCK_PREFIX = "lock:product:detail:";
+
     @Autowired
     private ProductDetailMapper productDetailMapper;
     @Autowired
@@ -39,21 +45,69 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     private UserMapper userMapper;
     @Autowired
     private ProductCacheService productCacheService;
+    @Autowired
+    private RedissonClient redissonClient;
 
     @Override
     public ProductDetailVO productDetail(Long productId) {
+        // 1. 先读缓存：命中直接返回；命中空值标记直接 404（防穿透）。
+        ProductDetailVO cached = readCacheOrThrow(productId);
+        if (cached != null) {
+            return cached;
+        }
+
+        // 2. 缓存未命中：加分布式锁，只放一个线程回源重建，其余线程等待后读缓存（防击穿）。
+        RLock lock = redissonClient.getLock(DETAIL_LOCK_PREFIX + productId);
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(2, 10, TimeUnit.SECONDS);
+            if (!locked) {
+                // 没抢到锁，说明已有线程在重建；稍等后再读一次缓存。
+                ProductDetailVO afterWait = readCacheOrThrow(productId);
+                if (afterWait != null) {
+                    return afterWait;
+                }
+                // 兜底：仍未就绪则自行回源，避免请求一直挂着。
+                return loadFromDbAndCache(productId);
+            }
+
+            // 拿到锁后二次确认：可能在等待锁期间别的线程已经重建好。
+            ProductDetailVO doubleCheck = readCacheOrThrow(productId);
+            if (doubleCheck != null) {
+                return doubleCheck;
+            }
+            return loadFromDbAndCache(productId);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return loadFromDbAndCache(productId);
+        } finally {
+            if (locked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 读缓存：HIT 返回数据；ABSENT 抛 404；MISS 返回 null 交给上层回源。
+     */
+    private ProductDetailVO readCacheOrThrow(Long productId) {
         ProductDetailCacheResult lookup = productCacheService.lookupDetail(productId);
         if (lookup.status() == ProductDetailCacheResult.Status.HIT) {
             return lookup.value();
         }
         if (lookup.status() == ProductDetailCacheResult.Status.ABSENT) {
-            // 命中空值标记：这个 id 之前已确认不存在，直接 404，不再打库。
             throw new BusinessException(404, "商品不存在");
         }
+        return null;
+    }
 
+    /**
+     * 回源数据库并写缓存。持锁线程或兜底线程才会走到这里。
+     */
+    private ProductDetailVO loadFromDbAndCache(Long productId) {
         ProductDO productDO = productService.getById(productId);
         if (productDO == null) {
-            // 回源后确认商品不存在，写空值标记，防止同一非法 id 反复穿透到数据库。
+            // 确认不存在，写空值标记防穿透。
             productCacheService.cacheAbsent(productId);
             throw new BusinessException(404, "商品不存在");
         }
@@ -64,10 +118,6 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         }
 
         List<ProductImageDO> productImageDOList = productDetailMapper.selectImageListByProductId(productId);
-        if (productImageDOList.isEmpty()) {
-            log.info("productImageDOList is empty");
-        }
-        log.info("productImageDOList size:{}", productImageDOList.size());
         List<ProductReviewDO> productReviewDOList = productDetailMapper.selectReviewListByProductId(productId);
 
         ProductDetailVO productDetailVO = new ProductDetailVO()

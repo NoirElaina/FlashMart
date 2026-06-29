@@ -7,7 +7,9 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -63,5 +65,23 @@ public class ProductCacheService {
      */
     public void cacheAbsent(Long productId) {
         stringRedisTemplate.opsForValue().set(PRODUCT_DETAIL_KEY_PREFIX + productId, NULL_MARKER, NULL_TTL);
+    }
+
+    /**
+     * 删除商品详情缓存。数据更新后调用（Cache Aside：先更库，再删缓存）。
+     */
+    public void evictDetail(Long productId) {
+        stringRedisTemplate.delete(PRODUCT_DETAIL_KEY_PREFIX + productId);
+    }
+
+    /**
+     * 延迟双删：删一次后，过一小段时间再删一次。
+     * 目的是清掉"更新期间被并发读把旧值又回填进缓存"的脏数据。
+     */
+    public void evictDetailDelayed(Long productId) {
+        CompletableFuture.runAsync(
+                () -> stringRedisTemplate.delete(PRODUCT_DETAIL_KEY_PREFIX + productId),
+                CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
+        );
     }
 }

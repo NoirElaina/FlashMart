@@ -3,6 +3,7 @@ package org.example.flashmart.product.service.impl;
 import lombok.extern.slf4j.Slf4j;
 import org.example.flashmart.common.exception.BusinessException;
 import org.example.flashmart.product.cache.ProductCacheService;
+import org.example.flashmart.product.cache.ProductDetailCacheResult;
 import org.example.flashmart.product.mapper.ProductDetailMapper;
 import org.example.flashmart.product.model.dataobject.ProductDO;
 import org.example.flashmart.product.model.dataobject.ProductDetailDO;
@@ -41,12 +42,19 @@ public class ProductDetailServiceImpl implements ProductDetailService {
 
     @Override
     public ProductDetailVO productDetail(Long productId) {
-        ProductDetailVO cached = productCacheService.getProductDetail(productId);
-        if (cached != null) {
-            return cached;
+        ProductDetailCacheResult lookup = productCacheService.lookupDetail(productId);
+        if (lookup.status() == ProductDetailCacheResult.Status.HIT) {
+            return lookup.value();
         }
+        if (lookup.status() == ProductDetailCacheResult.Status.ABSENT) {
+            // 命中空值标记：这个 id 之前已确认不存在，直接 404，不再打库。
+            throw new BusinessException(404, "商品不存在");
+        }
+
         ProductDO productDO = productService.getById(productId);
         if (productDO == null) {
+            // 回源后确认商品不存在，写空值标记，防止同一非法 id 反复穿透到数据库。
+            productCacheService.cacheAbsent(productId);
             throw new BusinessException(404, "商品不存在");
         }
 
@@ -88,7 +96,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .setSeckill(buildSeckill(productDO))
                 .setReviewSummary(buildReviewSummary(productReviewDOList));
 
-        productCacheService.putProductDetail(productId, productDetailVO);
+        productCacheService.cacheDetail(productId, productDetailVO);
         return productDetailVO;
     }
 

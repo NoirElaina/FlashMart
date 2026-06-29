@@ -27,11 +27,14 @@ function setupAuthInterceptors(instance: AxiosInstance) {
                 localStorage.removeItem('token')
                 localStorage.removeItem('username')
 
-                if (router.currentRoute.value.path !== '/login') {
+                // 仅当当前页面本身需要登录时才跳转；首页等公开页遇到 401 只清失效 token，不重定向。
+                const currentRoute = router.currentRoute.value
+                const requiresAuth = currentRoute.matched.some((r) => r.meta.requiresAuth)
+                if (requiresAuth && currentRoute.path !== '/login') {
                     await router.push({
                         path: '/login',
                         query: {
-                            redirect: router.currentRoute.value.fullPath,
+                            redirect: currentRoute.fullPath,
                         },
                     })
                 }

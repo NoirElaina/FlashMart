@@ -69,4 +69,10 @@ public class CartController {
         cartService.removeCartItems(userId, dto);
         return Result.success("批量删除购物车商品成功");
     }
+
+    @DeleteMapping("/invalid")
+    public Result<String> removeInvalidItems(@RequestAttribute Long userId) {
+        cartService.removeInvalidItems(userId);
+        return Result.success("已清理失效商品");
+    }
 }

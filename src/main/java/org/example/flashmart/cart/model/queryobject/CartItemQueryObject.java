@@ -20,6 +20,7 @@ public class CartItemQueryObject {
     private Integer sold;
     private Boolean seckill;
     private Integer limitPerUser;
+    private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

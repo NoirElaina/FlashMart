@@ -24,4 +24,6 @@ public interface CartService {
     void updateSelectedBatch(Long userId, CartSelectedBatchUpdateDTO dto);
 
     void removeCartItems(Long userId, CartBatchDeleteDTO dto);
+
+    void removeInvalidItems(Long userId);
 }

@@ -11,6 +11,8 @@ export interface CartApiItem {
     stock: number
     sold: number
     limitPerUser: number | null
+    available: boolean
+    invalidReason: string | null
 }
 
 export interface CartItem extends Omit<CartApiItem, 'selected'> {

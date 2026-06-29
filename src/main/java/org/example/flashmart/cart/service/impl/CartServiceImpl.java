@@ -144,6 +144,15 @@ public class CartServiceImpl implements CartService {
         cartCacheService.evictCartCount(userId);
     }
 
+    @Override
+    public void removeInvalidItems(Long userId) {
+        // 清理已下架/已删除的商品；清理 0 条也算成功（幂等）。
+        int deleted = cartMapper.deleteInvalidByUserId(userId);
+        if (deleted > 0) {
+            cartCacheService.evictCartCount(userId);
+        }
+    }
+
     private void validateQuantity(ProductDO productDO, Integer quantity) {
         if (productDO.getStock() == null || productDO.getStock() <= 0) {
             throw new BusinessException("商品库存不足");
@@ -171,6 +180,12 @@ public class CartServiceImpl implements CartService {
         cartVO.setStock(cartItemQueryObject.getStock());
         cartVO.setSold(cartItemQueryObject.getSold());
         cartVO.setLimitPerUser(cartItemQueryObject.getLimitPerUser());
+        // 商品被删除(左连接查不到 name) 或已下架(status != 1) 视为失效项，前端可标灰并提示清理。
+        boolean deleted = cartItemQueryObject.getName() == null;
+        boolean offShelf = !deleted
+                && (cartItemQueryObject.getStatus() == null || cartItemQueryObject.getStatus() != 1);
+        cartVO.setAvailable(!deleted && !offShelf);
+        cartVO.setInvalidReason(deleted ? "商品不存在" : (offShelf ? "商品已下架" : null));
         cartVO.setCreateTime(cartItemQueryObject.getCreateTime());
         cartVO.setUpdateTime(cartItemQueryObject.getUpdateTime());
         return cartVO;

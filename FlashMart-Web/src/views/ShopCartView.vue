@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+    clearInvalidCartItems,
     deleteCartItem,
     deleteCartItems,
     getCartItems,
@@ -38,23 +39,27 @@ const errorMessage = ref('')
 const updatingItemIds = ref<number[]>([])
 const batchUpdating = ref(false)
 
-const selectedCount = computed(() => cartItems.value.filter((item) => item.selected).length)
+const selectedCount = computed(() => cartItems.value.filter((item) => item.selected && item.available).length)
 const totalQuantity = computed(() => cartItems.value.reduce((sum, item) => sum + item.quantity, 0))
+const hasInvalidItems = computed(() => cartItems.value.some((item) => !item.available))
 const subtotal = computed(() =>
     cartItems.value
-        .filter((item) => item.selected)
+        .filter((item) => item.selected && item.available)
         .reduce((sum, item) => sum + item.salePrice * item.quantity, 0),
 )
 const originalTotal = computed(() =>
     cartItems.value
-        .filter((item) => item.selected)
+        .filter((item) => item.selected && item.available)
         .reduce((sum, item) => sum + item.originalPrice * item.quantity, 0),
 )
 const savings = computed(() => Math.max(0, originalTotal.value - subtotal.value))
 const shippingFee = computed(() => (selectedCount.value > 0 ? 0 : 18))
 const payable = computed(() => subtotal.value + shippingFee.value)
 const allSelected = computed({
-  get: () => cartItems.value.length > 0 && cartItems.value.every((item) => item.selected),
+  get: () => {
+    const available = cartItems.value.filter((item) => item.available)
+    return available.length > 0 && available.every((item) => item.selected)
+  },
   set: () => {},
 })
 
@@ -132,7 +137,7 @@ async function updateAllSelected(selected: boolean) {
         return
     }
 
-    const targetItems = cartItems.value.filter((item) => item.selected !== selected)
+    const targetItems = cartItems.value.filter((item) => item.available && item.selected !== selected)
     if (targetItems.length === 0) {
         return
     }
@@ -203,10 +208,28 @@ async function clearSelected() {
     }
 }
 
+async function clearInvalid() {
+    if (batchUpdating.value) {
+        return
+    }
+    batchUpdating.value = true
+    errorMessage.value = ''
+    try {
+        await clearInvalidCartItems()
+        await fetchCart()
+    } catch (error) {
+        errorMessage.value = resolveApiError(error, '清理失效商品失败，请稍后重试')
+    } finally {
+        batchUpdating.value = false
+    }
+}
+
 function goCheckout() {
-    const selectedIds = cartItems.value.filter((item) => item.selected).map((item) => item.id)
+    const selectedIds = cartItems.value
+        .filter((item) => item.selected && item.available)
+        .map((item) => item.id)
     if (selectedIds.length === 0) {
-        errorMessage.value = '请选择要结算的商品'
+        errorMessage.value = '请选择要结算的有效商品'
         return
     }
 
@@ -267,6 +290,8 @@ async function fetchCart() {
                 stock: item.stock ?? 0,
                 sold: item.sold ?? 0,
                 limitPerUser: item.limitPerUser ?? null,
+                available: item.available ?? true,
+                invalidReason: item.invalidReason ?? null,
             }
 
             return {
@@ -399,6 +424,7 @@ onMounted(() => {
 
                             <div class="flex flex-wrap items-center gap-3">
                                 <Badge variant="secondary">购物车共 {{ cartItems.length }} 条记录</Badge>
+                                <Button v-if="hasInvalidItems" variant="outline" size="sm" :disabled="batchUpdating || loading" @click="clearInvalid">清理失效商品</Button>
                                 <Button variant="outline" size="sm" @click="clearSelected">删除已选</Button>
                             </div>
                         </CardContent>
@@ -408,6 +434,7 @@ onMounted(() => {
                         v-for="item in cartItems"
                         :key="item.id"
                         class="overflow-hidden border-white/80 bg-white/92 shadow-[0_18px_40px_rgba(15,23,42,.05)]"
+                        :class="{ 'opacity-60 grayscale': !item.available }"
                     >
                         <CardContent class="p-5">
                             <div class="grid gap-5 lg:grid-cols-[auto_132px_1fr_auto] lg:items-center">
@@ -416,7 +443,7 @@ onMounted(() => {
                                         :checked="item.selected"
                                         type="checkbox"
                                         class="size-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                                        :disabled="isItemUpdating(item.id) || batchUpdating || loading"
+                                        :disabled="!item.available || isItemUpdating(item.id) || batchUpdating || loading"
                                         @change="handleSelectedChange(item.id, $event)"
                                     />
                                 </label>
@@ -432,7 +459,8 @@ onMounted(() => {
                                 <div class="space-y-3">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <Badge variant="secondary">{{ item.category }}</Badge>
-                                        <Badge v-if="item.tag" class="bg-orange-500 hover:bg-orange-500">{{ item.tag }}</Badge>
+                                        <Badge v-if="item.available && item.tag" class="bg-orange-500 hover:bg-orange-500">{{ item.tag }}</Badge>
+                                        <Badge v-if="!item.available" class="bg-slate-500 hover:bg-slate-500">{{ item.invalidReason || '已失效' }}</Badge>
                                     </div>
 
                                     <button
@@ -443,8 +471,8 @@ onMounted(() => {
                                         {{ item.name }}
                                     </button>
 
-                                    <p class="text-sm leading-7 text-slate-600">
-                                        {{ item.stockText }}
+                                    <p class="text-sm leading-7" :class="item.available ? 'text-slate-600' : 'text-red-500'">
+                                        {{ item.available ? item.stockText : (item.invalidReason || '商品已失效，建议清理') }}
                                     </p>
 
                                     <div class="flex flex-wrap items-end gap-3">
@@ -457,13 +485,13 @@ onMounted(() => {
 
                                 <div class="flex flex-col items-start gap-4 lg:items-end">
                                     <div class="flex items-center rounded-full border bg-slate-50 p-1">
-                                        <Button variant="ghost" size="icon" class="size-8 rounded-full" :disabled="isItemUpdating(item.id) || batchUpdating || loading" @click="updateQuantity(item.id, -1)">
+                                        <Button variant="ghost" size="icon" class="size-8 rounded-full" :disabled="!item.available || isItemUpdating(item.id) || batchUpdating || loading" @click="updateQuantity(item.id, -1)">
                                             <Minus class="size-4" />
                                         </Button>
                                         <span class="min-w-10 text-center text-sm font-semibold text-slate-900">
                                             {{ item.quantity }}
                                         </span>
-                                        <Button variant="ghost" size="icon" class="size-8 rounded-full" :disabled="isItemUpdating(item.id) || batchUpdating || loading" @click="updateQuantity(item.id, 1)">
+                                        <Button variant="ghost" size="icon" class="size-8 rounded-full" :disabled="!item.available || isItemUpdating(item.id) || batchUpdating || loading" @click="updateQuantity(item.id, 1)">
                                             <Plus class="size-4" />
                                         </Button>
                                     </div>

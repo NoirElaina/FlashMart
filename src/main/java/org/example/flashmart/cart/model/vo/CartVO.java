@@ -19,6 +19,8 @@ public class CartVO {
     private Integer stock;
     private Integer sold;
     private Integer limitPerUser;
+    private Boolean available;
+    private String invalidReason;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

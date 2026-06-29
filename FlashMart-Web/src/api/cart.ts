@@ -37,3 +37,7 @@ export function deleteCartItems(payload: CartBatchDeletePayload) {
         data: payload,
     })
 }
+
+export function clearInvalidCartItems() {
+    return request.delete<ApiResponse<string>>('/api/cart/invalid')
+}

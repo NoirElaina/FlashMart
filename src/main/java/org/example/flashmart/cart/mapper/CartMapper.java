@@ -30,6 +30,7 @@ public interface CartMapper {
                 p.sold,
                 p.is_seckill as seckill,
                 p.limit_per_user as limitPerUser,
+                p.status,
                 c.create_time as createTime,
                 c.update_time as updateTime
             from shopping_cart c
@@ -122,6 +123,17 @@ public interface CartMapper {
             where user_id = #{userId}
             """)
     Integer countQuantityByUserId(@Param("userId") Long userId);
+
+    /**
+     * 清理失效购物车项：关联商品已删除或已下架（status != 1）的，全部删除。
+     */
+    @Delete("""
+            delete c from shopping_cart c
+            left join products p on c.product_id = p.id
+            where c.user_id = #{userId}
+              and (p.id is null or p.status <> 1)
+            """)
+    int deleteInvalidByUserId(@Param("userId") Long userId);
 
     /**
      * 批量勾选同样限制当前用户，避免前端传入别人的 cartId 时越权更新。

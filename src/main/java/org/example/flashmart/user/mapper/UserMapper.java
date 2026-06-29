@@ -7,6 +7,8 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.example.flashmart.user.model.dataobject.UserDO;
 
+import java.util.List;
+
 @Mapper
 public interface UserMapper {
     /**
@@ -44,6 +46,21 @@ public interface UserMapper {
             WHERE id = #{id}
             """)
     UserDO selectById(@Param("id") Integer id);
+
+    /**
+     * 批量按 id 查询用户，用于消除"评价列表逐条查用户"的 N+1 问题。
+     */
+    @Select("""
+            <script>
+            SELECT id, username, email, password, role,
+                   create_time AS createdTime,
+                   update_time AS updatedTime
+            FROM user_info
+            WHERE id IN
+            <foreach item="id" collection="ids" open="(" separator="," close=")">#{id}</foreach>
+            </script>
+            """)
+    List<UserDO> selectByIds(@Param("ids") List<Integer> ids);
 
     /**
      * 注册唯一性校验：用户名不能重复。

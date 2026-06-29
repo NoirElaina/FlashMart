@@ -6,6 +6,7 @@ import org.example.flashmart.product.cache.ProductCacheService;
 import org.example.flashmart.product.mapper.ProductMapper;
 import org.example.flashmart.product.model.dataobject.ProductDO;
 import org.example.flashmart.product.model.query.ProductQuery;
+import org.example.flashmart.product.model.vo.ProductVO;
 import org.example.flashmart.product.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,13 +22,16 @@ public class ProductServiceImpl implements ProductService {
     private ProductCacheService productCacheService;
 
     @Override
-    public PageResult<ProductDO> pageProducts(ProductQuery productQuery) {
+    public PageResult<ProductVO> pageProducts(ProductQuery productQuery) {
         int currentPage = (productQuery.getPage() == null || productQuery.getPage() < 1) ? 1 : productQuery.getPage();
         int size = (productQuery.getPageSize() == null || productQuery.getPageSize() < 1) ? 10 : productQuery.getPageSize();
         int offset = (currentPage - 1) * size;
         String category = productQuery.getCategory();
         String normalizedCategory = (category == null || category.isBlank() || "全部".equals(category)) ? null : category;
-        List<ProductDO> products = productMapper.pageProducts(offset, size, normalizedCategory);
+        List<ProductVO> products = productMapper.pageProducts(offset, size, normalizedCategory)
+                .stream()
+                .map(this::toVO)
+                .toList();
         long total = productMapper.countProducts(normalizedCategory);
         return new PageResult<>(products, total, currentPage, size);
     }
@@ -62,5 +66,23 @@ public class ProductServiceImpl implements ProductService {
     private void evictDetailCache(Long productId) {
         productCacheService.evictDetail(productId);
         productCacheService.evictDetailDelayed(productId);
+    }
+
+    private ProductVO toVO(ProductDO product) {
+        return new ProductVO()
+                .setId(product.getId())
+                .setName(product.getName())
+                .setImage(product.getImage())
+                .setCategory(product.getCategory())
+                .setOriginalPrice(product.getOriginalPrice())
+                .setSalePrice(product.getSalePrice())
+                .setStock(product.getStock())
+                .setSold(product.getSold())
+                .setLimitPerUser(product.getLimitPerUser())
+                .setHot(product.getHot())
+                .setSeckill(product.getSeckill())
+                .setStatus(product.getStatus())
+                .setSeckillStartTime(product.getSeckillStartTime())
+                .setSeckillEndTime(product.getSeckillEndTime());
     }
 }

@@ -28,6 +28,7 @@ public class AuthMvcConfig implements WebMvcConfigurer {
                         "/api/user/refresh",
                         "/api/products",
                         "/api/products/**",
+                        "/api/categories",
                         "/login",
                         "/register",
                         "/css/**",

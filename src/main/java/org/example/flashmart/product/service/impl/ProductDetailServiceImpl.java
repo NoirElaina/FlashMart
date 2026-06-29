@@ -165,11 +165,24 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 ));
         reviewSummaryVO.setDistribution(distribution);
 
-        List<ReviewVO> latestReviews = productReviewDOList.stream()
+        List<ProductReviewDO> latest = productReviewDOList.stream()
                 .sorted(Comparator.comparing(ProductReviewDO::getCreateTime).reversed())
                 .limit(5)
+                .toList();
+
+        // 先收集本页要展示的用户 id，一次性批量查回，避免逐条 selectById 的 N+1 查询。
+        List<Integer> userIds = latest.stream()
+                .map(ProductReviewDO::getUserId)
+                .distinct()
+                .toList();
+        Map<Integer, UserDO> userMap = userIds.isEmpty()
+                ? Collections.emptyMap()
+                : userMapper.selectByIds(userIds).stream()
+                        .collect(Collectors.toMap(u -> u.getId().intValue(), u -> u));
+
+        List<ReviewVO> latestReviews = latest.stream()
                 .map(review -> {
-                    UserDO userDO = userMapper.selectById(review.getUserId());
+                    UserDO userDO = userMap.get(review.getUserId());
                     ReviewVO reviewVO = new ReviewVO();
                     reviewVO.setId(review.getId());
                     reviewVO.setRating(review.getRating());

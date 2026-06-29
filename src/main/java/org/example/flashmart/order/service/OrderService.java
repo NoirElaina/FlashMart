@@ -8,6 +8,8 @@ import org.example.flashmart.order.model.vo.OrderDetailVO;
 import java.util.List;
 
 public interface OrderService {
+    String issueOrderToken();
+
     OrderCreateVO createOrder(Long userId, OrderCreateDTO dto);
 
     List<OrderDetailVO> listOrders(Long userId);

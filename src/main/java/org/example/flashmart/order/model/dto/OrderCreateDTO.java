@@ -21,6 +21,11 @@ public class OrderCreateDTO {
 
     private Integer quantity;
 
+    /**
+     * 下单幂等令牌，由 GET /api/orders/token 获取，提交订单时回传。
+     */
+    private String idempotencyToken;
+
     @NotBlank(message = "收货人不能为空")
     @Size(max = 64, message = "收货人不能超过64个字符")
     private String receiverName;

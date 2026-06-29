@@ -6,6 +6,10 @@ export function createOrder(payload: OrderCreatePayload) {
     return request.post<ApiResponse<OrderCreateResult>>('/api/orders', payload)
 }
 
+export function getOrderToken() {
+    return request.post<ApiResponse<string>>('/api/orders/token')
+}
+
 export function createSeckillOrder(payload: OrderCreatePayload) {
     return request.post<ApiResponse<OrderCreateResult>>('/api/orders/seckill', payload)
 }

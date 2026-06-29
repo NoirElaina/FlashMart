@@ -18,6 +18,11 @@ public class OrderController {
     @Autowired
     private OrderService orderService;
 
+    @PostMapping("/token")
+    public Result<String> issueOrderToken() {
+        return Result.success(orderService.issueOrderToken());
+    }
+
     @PostMapping
     public Result<OrderCreateVO> createOrder(@RequestAttribute Long userId, @Valid @RequestBody OrderCreateDTO dto) {
         return Result.success(orderService.createOrder(userId, dto));

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { previewCheckout } from '@/api/checkout'
-import { createOrder, createSeckillOrder } from '@/api/order'
+import { createOrder, createSeckillOrder, getOrderToken } from '@/api/order'
 import { resolveApiError } from '@/utils/apiError'
 import type { CheckoutMode, CheckoutPreview, CheckoutPreviewPayload } from '@/types/checkout'
 
@@ -27,6 +27,9 @@ const receiverName = ref('')
 const receiverPhone = ref('')
 const receiverAddress = ref('')
 const receiverAddressMaxLength = 255
+
+// 下单幂等令牌：普通订单（非秒杀）进页面时获取，提交时回传，防止重复提交生成多单。
+const orderToken = ref('')
 
 const mode = computed<CheckoutMode | null>(() => {
     if (route.query.mode === 'CART' || route.query.mode === 'BUY_NOW' || route.query.mode === 'SECKILL') {
@@ -148,6 +151,20 @@ async function fetchPreview() {
     }
 }
 
+async function loadOrderToken() {
+    if (mode.value === 'SECKILL') {
+        return
+    }
+    try {
+        const res = await getOrderToken()
+        if (res.data.code === 200) {
+            orderToken.value = res.data.data
+        }
+    } catch {
+        // 拿不到令牌不阻塞页面渲染，提交时会再补一次
+    }
+}
+
 async function submitOrder() {
     if (!preview.value?.canSubmit) {
         errorMessage.value = '当前订单不可提交，请检查商品库存'
@@ -175,12 +192,22 @@ async function submitOrder() {
             receiverPhone: receiverPhone.value.trim(),
             receiverAddress: receiverAddress.value.trim(),
         }
-        const response = mode.value === 'SECKILL'
-            ? await createSeckillOrder(orderPayload)
-            : await createOrder(orderPayload)
+
+        let response
+        if (mode.value === 'SECKILL') {
+            response = await createSeckillOrder(orderPayload)
+        } else {
+            if (!orderToken.value) {
+                await loadOrderToken()
+            }
+            response = await createOrder({ ...orderPayload, idempotencyToken: orderToken.value })
+        }
 
         if (response.data.code !== 200) {
             errorMessage.value = response.data.message || '提交订单失败'
+            // 令牌可能已被消费，刷新一个新的以便用户重试。
+            orderToken.value = ''
+            await loadOrderToken()
             return
         }
 
@@ -188,12 +215,17 @@ async function submitOrder() {
         await router.push(`/orders/${response.data.data.orderId}`)
     } catch (error) {
         errorMessage.value = resolveApiError(error, '提交订单失败，请稍后重试')
+        orderToken.value = ''
+        await loadOrderToken()
     } finally {
         submitting.value = false
     }
 }
 
-onMounted(fetchPreview)
+onMounted(() => {
+    fetchPreview()
+    loadOrderToken()
+})
 </script>
 
 <template>

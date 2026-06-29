@@ -13,6 +13,7 @@ import org.example.flashmart.order.model.vo.OrderCreateVO;
 import org.example.flashmart.order.model.vo.OrderDetailVO;
 import org.example.flashmart.order.model.vo.OrderItemVO;
 import org.example.flashmart.order.service.OrderService;
+import org.example.flashmart.order.service.OrderTokenService;
 import org.example.flashmart.product.mapper.ProductMapper;
 import org.example.flashmart.product.model.dataobject.ProductDO;
 import org.redisson.api.RLock;
@@ -53,10 +54,21 @@ public class OrderServiceImpl implements OrderService {
     private RedissonClient redissonClient;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private OrderTokenService orderTokenService;
+
+    @Override
+    public String issueOrderToken() {
+        return orderTokenService.issue();
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderCreateVO createOrder(Long userId, OrderCreateDTO dto) {
+        // 幂等校验：消费一次性 token，重复提交的第二次拿不到 token 会被直接拦下。
+        if (!orderTokenService.consume(dto.getIdempotencyToken())) {
+            throw new BusinessException("请勿重复提交订单");
+        }
         return createOrderInternal(userId, dto, false);
     }
 

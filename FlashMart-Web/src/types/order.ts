@@ -3,6 +3,7 @@ export interface OrderCreatePayload {
     cartIds?: number[]
     productId?: number
     quantity?: number
+    idempotencyToken?: string
     receiverName: string
     receiverPhone: string
     receiverAddress: string

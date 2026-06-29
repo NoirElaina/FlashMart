@@ -22,8 +22,10 @@ public class AuthMvcConfig implements WebMvcConfigurer {
                         // 商品浏览和登录注册保持公开，购物车、结算、订单等交易接口必须登录。
                         "/api/auth/login",
                         "/api/auth/register",
+                        "/api/auth/refresh",
                         "/api/user/login",
                         "/api/user/register",
+                        "/api/user/refresh",
                         "/api/products",
                         "/api/products/**",
                         "/login",

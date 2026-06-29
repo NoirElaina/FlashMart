@@ -34,6 +34,8 @@ build/
 docs
 
 ### Local secrets / env overrides ###
+application-dev.yml
+application-prod.yml
 application-local.yml
 application-local.yaml
 *.local.yml

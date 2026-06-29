@@ -13,7 +13,7 @@ public interface UserMapper {
      * 登录支持用户名或邮箱，因此 account 同时匹配 username / email。
      */
     @Select("""
-            SELECT id, username, email, password,
+            SELECT id, username, email, password, role,
                    create_time AS createdTime,
                    update_time AS updatedTime
             FROM user_info
@@ -25,7 +25,7 @@ public interface UserMapper {
      * 注册前检查用户名是否已经存在。
      */
     @Select("""
-            SELECT id, username, email, password,
+            SELECT id, username, email, password, role,
                    create_time AS createdTime,
                    update_time AS updatedTime
             FROM user_info
@@ -37,7 +37,7 @@ public interface UserMapper {
      * 根据登录态中的用户 ID 查询用户基础信息。
      */
     @Select("""
-            SELECT id, username, email, password,
+            SELECT id, username, email, password, role,
                    create_time AS createdTime,
                    update_time AS updatedTime
             FROM user_info
@@ -64,8 +64,12 @@ public interface UserMapper {
     int countByAccount(@Param("account") String account);
 
     /**
-     * 密码应在 Service 层完成加密后再写入数据库。
+     * 密码须在 Service 层完成 BCrypt 加密后再写入数据库。
      */
-    @Insert("INSERT INTO user_info (username, email, password, create_time, update_time) VALUES (#{username}, #{email}, #{password}, NOW(), NOW())")
-    int insertUser(@Param("username") String username, @Param("email") String email, @Param("password") String password);
+    @Insert("INSERT INTO user_info (username, email, password, role, create_time, update_time) "
+            + "VALUES (#{username}, #{email}, #{password}, #{role}, NOW(), NOW())")
+    int insertUser(@Param("username") String username,
+                   @Param("email") String email,
+                   @Param("password") String password,
+                   @Param("role") String role);
 }

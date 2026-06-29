@@ -19,8 +19,10 @@ interface ApiResponse<T> {
 }
 
 interface AuthResponseData {
-    token: string
+    accessToken: string
+    refreshToken: string
     username: string
+    role: string
 }
 
 const route = useRoute()
@@ -80,8 +82,8 @@ async function submit() {
             return
         }
 
-        const { token, username } = res.data.data
-        userStore.setUser(token, username)
+        const { accessToken, refreshToken, username, role } = res.data.data
+        userStore.setUser(accessToken, refreshToken, username, role)
 
         const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
             ? route.query.redirect

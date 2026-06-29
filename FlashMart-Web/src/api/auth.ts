@@ -2,8 +2,10 @@ import { request } from '@/api/client'
 import type { ApiResponse } from '@/types/api'
 
 export interface AuthResponseData {
-    token: string
+    accessToken: string
+    refreshToken: string
     username: string
+    role: string
 }
 
 export interface LoginPayload {
